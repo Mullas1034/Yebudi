@@ -1,0 +1,30 @@
+# Local TimescaleDB for development.
+# Docker isn't required — any Postgres 16 with the TimescaleDB extension works.
+# If you have Docker: `docker compose up -d` then apply db/migrations/0001_init.sql.
+#
+# Note: files in db/migrations are auto-applied ONLY on the very first init of an
+# empty volume (Postgres' docker-entrypoint-initdb.d behaviour). For ongoing
+# schema changes, run migrations explicitly with a runner (see db/README.md).
+
+services:
+  db:
+    image: timescale/timescaledb:latest-pg16 # pin to a specific patch tag for prod
+    container_name: garmin-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: garmin
+      POSTGRES_PASSWORD: garmin
+      POSTGRES_DB: garmin
+    ports:
+      - "5432:5432"
+    volumes:
+      - garmin_pgdata:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U garmin -d garmin"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  garmin_pgdata:
