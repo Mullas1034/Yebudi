@@ -36,6 +36,10 @@ services:
       GARMIN_SOURCE: ${GARMIN_SOURCE:-python-garminconnect}
       GARMIN_EMAIL: ${GARMIN_EMAIL:-}
       GARMIN_PASSWORD: ${GARMIN_PASSWORD:-}
+      GARMINTOKENS: /tokens
+      GARMIN_TOKEN_STORE: /tokens
+    volumes:
+      - ./.garmin_tokens:/tokens # supply Garth tokens here (git-ignored)
     profiles: ["cli"] # not started by `up`; invoke with `docker compose run`
     restart: "no"
 

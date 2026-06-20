@@ -7,6 +7,9 @@ COPY pyproject.toml README.md ./
 COPY src ./src
 RUN pip install --no-cache-dir .
 
+# Tests ship too, so `pytest` can run in-container (see worker/README / plan).
+COPY tests ./tests
+
 # Batch CLI: pass args via `docker compose run --rm worker <args>`.
 ENTRYPOINT ["garmin-ingest"]
 CMD ["--help"]

@@ -29,12 +29,21 @@ def main(argv: list[str] | None = None) -> int:
     p_act = sub.add_parser("activity", help="sync a single activity by external id")
     p_act.add_argument("--id", required=True)
 
+    sub.add_parser("login", help="authenticate to the source and cache tokens (interactive)")
+
     args = parser.parse_args(argv)
 
     settings = Settings.from_env()
-    engine = get_engine(settings.database_url)
     source = get_source(settings)
 
+    if args.command == "login":
+        if hasattr(source, "login"):
+            source.login()
+        else:
+            print(f"source {settings.garmin_source!r} has no interactive login")
+        return 0
+
+    engine = get_engine(settings.database_url)
     if args.command == "daily":
         print(run_daily_sync(source, engine, args.date))
     elif args.command == "backfill":

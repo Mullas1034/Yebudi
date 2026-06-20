@@ -34,5 +34,19 @@ garmin-ingest backfill --start 2026-06-01 --end 2026-06-19
 garmin-ingest activity --id 1234567890
 ```
 
-Schedule `daily` with cron / Task Scheduler / a systemd timer. The concrete
-`garminconnect` calls are stubbed (`NotImplementedError`) — see `sources/garminconnect.py`.
+## Authentication (token-based)
+
+The `python-garminconnect` adapter **resumes from cached Garth tokens** — no credentials
+or MFA on the sync path. Put tokens in the tokenstore dir (`GARMINTOKENS`, mounted at
+`/tokens` in Docker via `./.garmin_tokens`). Generate them once, either:
+
+- in-container: `docker compose run --rm -it worker login` (prompts email/password/MFA), or
+- on any machine: `python -c "import garth; garth.login('EMAIL','PASSWORD'); garth.save('./.garmin_tokens')"`,
+  then copy `./.garmin_tokens/` to the server.
+
+Tokens auto-refresh, so `daily` / `backfill` / `activity` then need no credentials.
+Schedule `daily` with cron / a systemd timer (separate step).
+
+> Mapping field names are validated against real payloads stored in `raw.garmin_response`;
+> items marked `VERIFY` in `sources/garmin_mapping.py` (sleep-stage levels, set weight unit,
+> training load) should be sanity-checked against your first real sync.
