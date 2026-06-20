@@ -144,12 +144,14 @@ def map_daily_summary(
 
 
 def _training_load(ts: dict) -> tuple[float | None, float | None]:
-    """Best-effort dig into get_training_status; shape varies a lot. VERIFY against raw."""
+    """Acute/chronic load (verified vs raw): it lives under
+    mostRecentTrainingStatus.latestTrainingStatusData.<deviceId>.acuteTrainingLoadDTO.
+    """
     try:
-        balance = ts.get("mostRecentTrainingLoadBalance") or {}
-        per_device = balance.get("metricsTrainingLoadBalanceDTOMap") or {}
-        entry = next(iter(per_device.values()), {})
-        return _float(entry.get("acuteTrainingLoad")), _float(entry.get("chronicTrainingLoad"))
+        status_data = (ts.get("mostRecentTrainingStatus") or {}).get("latestTrainingStatusData") or {}
+        entry = next(iter(status_data.values()), {})  # keyed by deviceId
+        acwr = entry.get("acuteTrainingLoadDTO") or {}
+        return _float(acwr.get("dailyTrainingLoadAcute")), _float(acwr.get("dailyTrainingLoadChronic"))
     except Exception:
         return None, None
 

@@ -38,6 +38,25 @@ def test_map_daily_summary():
     assert dto.resting_hr == 48 and dto.stress_avg == 28
 
 
+def test_map_training_load_from_status():
+    # Real fenix 8 shape: load lives under latestTrainingStatusData.<deviceId>.acuteTrainingLoadDTO
+    ts = {
+        "mostRecentTrainingStatus": {
+            "latestTrainingStatusData": {
+                "3502821268": {
+                    "acuteTrainingLoadDTO": {
+                        "dailyTrainingLoadAcute": 340,
+                        "dailyTrainingLoadChronic": 265,
+                    }
+                }
+            }
+        }
+    }
+    dto = gm.map_daily_summary(date(2026, 6, 19), training_status=ts)
+    assert dto.training_load_acute == 340.0
+    assert dto.training_load_chronic == 265.0
+
+
 def test_map_hrv_and_stress_metrics():
     hrv = {"hrvReadings": [{"readingTimeGMT": "2026-06-19T06:00:00.0", "hrvValue": 66}]}
     metrics = gm.map_hrv_metrics(hrv)
