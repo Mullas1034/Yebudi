@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from ..config import Settings
 from .base import GarminSource
+from .fake import FakeSource
 from .garminconnect import GarminConnectSource
 
 
@@ -18,9 +19,11 @@ def get_source(settings: Settings) -> GarminSource:
             password=settings.garmin_password,
             token_store=settings.garmin_token_store,
         )
+    if name == "fake":
+        return FakeSource()
     # if name == "fit-file":
     #     return FitFileSource(settings.fit_dir)
     raise ValueError(f"unknown GARMIN_SOURCE: {name!r}")
 
 
-__all__ = ["GarminSource", "GarminConnectSource", "get_source"]
+__all__ = ["FakeSource", "GarminConnectSource", "GarminSource", "get_source"]
