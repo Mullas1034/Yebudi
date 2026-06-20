@@ -4,7 +4,7 @@ Fetches raw payloads and maps them to DTOs (see ``garmin_mapping``). The library
 import is lazy (inside the methods) so this module imports fine without the package,
 and the mapping layer stays unit-testable on its own.
 
-Auth is token-only on the sync path: ``_connect()`` resumes from cached Garth tokens
+Auth is token-only on the sync path: ``_connect()`` resumes from cached DI tokens
 in the tokenstore directory and never prompts, so a headless run cannot hang. Use
 ``login()`` (via ``garmin-ingest login``) once to populate the tokenstore, or drop
 token files into the mounted directory.
@@ -63,27 +63,36 @@ class GarminConnectSource(GarminSource):
         except Exception as exc:  # noqa: BLE001
             raise RuntimeError(
                 f"Garmin token login failed from {self._token_store!r}. Supply valid tokens: "
-                f"run `garmin-ingest login` interactively, or copy Garth token files into that "
+                f"run `garmin-ingest login` interactively, or copy token files into that "
                 f"directory. Underlying error: {exc!r}"
             ) from exc
         self._client = client
         return client
 
     def login(self) -> None:
-        """Interactive credential login (+MFA), persisting tokens to the tokenstore."""
+        """One-time interactive bootstrap (Path A) for garminconnect 0.3.x.
+
+        Authenticates with credentials + MFA on a single live client, then persists DI
+        tokens to the tokenstore. The sync path resumes from those tokens via _connect()
+        with no credentials and never prompts for MFA.
+        """
         import getpass
 
         from garminconnect import Garmin
 
         email = self._email or input("Garmin email: ").strip()
         password = self._password or getpass.getpass("Garmin password: ")
-        client = Garmin(email, password, prompt_mfa=lambda: input("MFA code: ").strip())
-        client.login()
-        try:
-            client.garth.dump(self._token_store)
-        except Exception:  # noqa: BLE001 — older/newer APIs persist via login(tokenstore)
-            client.login(self._token_store)
-        self._client = client
+
+        g = Garmin(email, password, return_on_mfa=True)
+        status, _ = g.login()  # ("needs_mfa", None) if MFA required, else (None, None)
+        if status == "needs_mfa":
+            # Must run on the SAME live object: the MFA state is held in memory on the
+            # client, not in the (ignored) first argument. A stateless web flow can't work.
+            g.resume_login({}, input("MFA code: ").strip())
+
+        os.makedirs(os.path.expanduser(self._token_store), exist_ok=True)
+        g.client.dump(self._token_store)  # explicit — the MFA path does not auto-save
+        self._client = g
         print(f"Tokens cached to {self._token_store}")
 
     def health_check(self) -> bool:

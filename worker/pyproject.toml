@@ -12,7 +12,7 @@ dependencies = [
     "sqlalchemy>=2.0",
     "psycopg[binary]>=3.2",
     "python-dotenv>=1.0",
-    "garminconnect>=0.2.25", # used by the python-garminconnect adapter (currently a stub)
+    "garminconnect>=0.3.6", # curl_cffi-based SSO + stateful MFA (no garth); pulls curl_cffi/ua-generator
 ]
 
 [project.optional-dependencies]

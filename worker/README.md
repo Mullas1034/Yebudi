@@ -34,15 +34,27 @@ garmin-ingest backfill --start 2026-06-01 --end 2026-06-19
 garmin-ingest activity --id 1234567890
 ```
 
-## Authentication (token-based)
+## Authentication (token-based, garminconnect 0.3.x)
 
-The `python-garminconnect` adapter **resumes from cached Garth tokens** — no credentials
-or MFA on the sync path. Put tokens in the tokenstore dir (`GARMINTOKENS`, mounted at
-`/tokens` in Docker via `./.garmin_tokens`). Generate them once, either:
+The adapter **resumes from cached DI tokens** — no credentials or MFA on the sync path.
+Tokens live in the tokenstore dir (`GARMINTOKENS`, mounted at `/tokens` in Docker via
+`./.garmin_tokens`). Generate them once, either:
 
-- in-container: `docker compose run --rm -it worker login` (prompts email/password/MFA), or
-- on any machine: `python -c "import garth; garth.login('EMAIL','PASSWORD'); garth.save('./.garmin_tokens')"`,
-  then copy `./.garmin_tokens/` to the server.
+- in-container (recommended): `docker compose run --rm -it worker login`
+  (prompts email / password / MFA, then caches tokens), or
+- on any machine, via a heredoc — avoid `python -c "..."`, since bash history-expands the
+  `!` in passwords and chokes on the parens:
+  ```bash
+  python - <<'PY'
+  from garminconnect import Garmin
+  g = Garmin("EMAIL", "PASSWORD", return_on_mfa=True)
+  status, _ = g.login()
+  if status == "needs_mfa":
+      g.resume_login({}, input("MFA code: ").strip())
+  g.client.dump("./.garmin_tokens")
+  PY
+  ```
+  then copy `./.garmin_tokens/` to the server's `~/Yebudi/.garmin_tokens/`.
 
 Tokens auto-refresh, so `daily` / `backfill` / `activity` then need no credentials.
 Schedule `daily` with cron / a systemd timer (separate step).
