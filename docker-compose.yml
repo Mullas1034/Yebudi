@@ -1,10 +1,10 @@
-# Local TimescaleDB for development.
-# Docker isn't required — any Postgres 16 with the TimescaleDB extension works.
-# If you have Docker: `docker compose up -d` then apply db/migrations/0001_init.sql.
+# Full local / self-hosted stack: TimescaleDB + ingestion worker + web.
+#   docker compose up -d --wait                          # starts db + web
+#   docker compose run --rm worker daily --date <date>   # runs the batch ingestion CLI
 #
-# Note: files in db/migrations are auto-applied ONLY on the very first init of an
-# empty volume (Postgres' docker-entrypoint-initdb.d behaviour). For ongoing
-# schema changes, run migrations explicitly with a runner (see db/README.md).
+# Migrations in db/migrations auto-apply only on the FIRST init of an empty volume
+# (Postgres docker-entrypoint-initdb.d). For later schema changes, apply explicitly
+# (see db/README.md).
 
 services:
   db:
@@ -25,6 +25,31 @@ services:
       interval: 5s
       timeout: 5s
       retries: 12
+
+  worker:
+    build: ./worker
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://garmin:garmin@db:5432/garmin # host = service name
+      GARMIN_SOURCE: ${GARMIN_SOURCE:-python-garminconnect}
+      GARMIN_EMAIL: ${GARMIN_EMAIL:-}
+      GARMIN_PASSWORD: ${GARMIN_PASSWORD:-}
+    profiles: ["cli"] # not started by `up`; invoke with `docker compose run`
+    restart: "no"
+
+  web:
+    build: ./web
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL_NODE: postgres://garmin:garmin@db:5432/garmin
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
 
 volumes:
   garmin_pgdata:
