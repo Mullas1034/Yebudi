@@ -27,15 +27,16 @@ interface MockupMetric {
   bd?: { title: string; items: { label: string; val: string; pct: number; color?: string }[] };
 }
 
-export interface MockupData {
+export interface PulseMockup {
   pulse: {
     name: string;
     where: string;
     date: string;
     trendKey: string;
+    empty?: string;
     hero: { type: "dial"; value: number; label: string; status: string; state: string; sub: string };
     metrics: MockupMetric[];
-    trend: { type: "line"; title: string; unit: string };
+    trend?: { type: "line"; title: string; unit: string };
   };
   heroFactors: {
     base: number;
@@ -107,7 +108,7 @@ const STAGE_COLORS: Record<string, string> = {
 
 // ── main ─────────────────────────────────────────────────────────────────────
 
-export function toMockupPulse(p: PulseData): MockupData {
+export function toMockupPulse(p: PulseData): PulseMockup {
   const s = p.summary;
   const h = p.history;
   const latest = <T,>(arr: T[]): T | undefined => (arr.length ? arr[arr.length - 1] : undefined);
@@ -281,12 +282,18 @@ export function toMockupPulse(p: PulseData): MockupData {
   const readinessSeries = buildSeries(h, (d) => d.readinessScore);
   const readinessVals = readinessSeries.map((x) => x.v);
 
+  // Only show metrics backed by real data (a drawable series); never fabricate.
+  const shown = metrics.filter((m) => m.series && m.series.length >= 2);
+  const hasHrv = shown.some((m) => m.id === "hrv");
+  const empty = !s && shown.length === 0 ? "No data yet — run a Garmin sync to populate your readiness." : undefined;
+
   return {
     pulse: {
       name: "Pulse",
       where: "Daily readiness",
       date: fmtDate(p.day),
       trendKey: "hrv",
+      empty,
       hero: {
         type: "dial",
         value: s?.readinessScore ?? 0,
@@ -295,8 +302,8 @@ export function toMockupPulse(p: PulseData): MockupData {
         state: meta.state,
         sub: "MORNING VALUE",
       },
-      metrics,
-      trend: { type: "line", title: "HRV · 7 days", unit: "ms" },
+      metrics: shown,
+      trend: hasHrv ? { type: "line", title: "HRV · 7 days", unit: "ms" } : undefined,
     },
     heroFactors: {
       base: s?.readinessScore ?? 70,

@@ -41,6 +41,61 @@ export interface SleepSessionTable {
   resting_hr: number | null;
 }
 
+export interface ActivityTable {
+  id: number;
+  external_id: string;
+  sport: string;
+  sub_sport: string | null;
+  name: string | null;
+  start_ts: Date;
+  end_ts: Date | null;
+  duration_s: number | null;
+  moving_s: number | null;
+  distance_m: number | null;
+  calories: number | null;
+  avg_hr: number | null;
+  max_hr: number | null;
+  training_load: number | null;
+  aerobic_te: number | null;
+  anaerobic_te: number | null;
+  rpe: number | null;
+}
+
+export interface StrengthSetTable {
+  id: number;
+  activity_id: number;
+  set_index: number;
+  exercise: string | null;
+  exercise_category: string | null;
+  reps: number | null;
+  weight_kg: number | null;
+  volume_kg: number | null;
+  rest_s: number | null;
+  start_ts: Date | null;
+  duration_s: number | null;
+}
+
+export interface ActivityZoneTable {
+  activity_id: number;
+  zone: number;
+  seconds_in: number;
+  low_bpm: number | null;
+  high_bpm: number | null;
+}
+
+export interface ActivitySampleTable {
+  activity_id: number;
+  ts: Date;
+  elapsed_s: number | null;
+  hr: number | null;
+  speed_mps: number | null;
+  cadence: number | null;
+  power_w: number | null;
+  altitude_m: number | null;
+  lat: number | null;
+  lon: number | null;
+}
+
 export interface GarminResponseTable {
   id: number;
   source: string;
@@ -56,5 +111,9 @@ export interface GarminResponseTable {
 export interface DB {
   daily_summary: DailySummaryTable; // curated
   sleep_session: SleepSessionTable; // curated
+  activity: ActivityTable; // curated
+  strength_set: StrengthSetTable; // curated
+  activity_zone: ActivityZoneTable; // curated
+  activity_sample: ActivitySampleTable; // curated
   garmin_response: GarminResponseTable; // raw
 }

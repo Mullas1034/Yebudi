@@ -206,6 +206,8 @@
   .screen[data-mode="forge"]{--accent:#F97316;--ink-accent:#B6420A;--accent-soft:rgba(249,115,22,.17);--blobA:rgba(251,146,60,.56);--blobB:rgba(255,176,96,.46)}
   .screen[data-mode="pitch"]{--accent:#2D7DF6;--ink-accent:#1A56C4;--accent-soft:rgba(45,125,246,.16);--blobA:rgba(70,150,255,.52);--blobB:rgba(125,182,255,.46)}
 
+  .empty{text-align:center;color:var(--ink-3);font-size:13px;line-height:1.5;padding:34px 18px}
+
   @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
   .anim>*{animation:rise .4s cubic-bezier(.2,.7,.3,1) backwards}
   .anim>*:nth-child(2){animation-delay:.04s}.anim>*:nth-child(3){animation-delay:.08s}

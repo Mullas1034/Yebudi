@@ -5,7 +5,12 @@ from datetime import date, datetime
 
 from .config import Settings
 from .db.engine import get_engine
-from .pipeline import run_activity_sync, run_backfill, run_daily_sync
+from .pipeline import (
+    run_activities_backfill,
+    run_activity_sync,
+    run_backfill,
+    run_daily_sync,
+)
 from .sources import get_source
 
 
@@ -28,6 +33,12 @@ def main(argv: list[str] | None = None) -> int:
 
     p_act = sub.add_parser("activity", help="sync a single activity by external id")
     p_act.add_argument("--id", required=True)
+
+    p_acts = sub.add_parser(
+        "activities", help="sync FULL detail for every activity in an inclusive date range"
+    )
+    p_acts.add_argument("--start", type=_parse_date, required=True)
+    p_acts.add_argument("--end", type=_parse_date, default=date.today())
 
     sub.add_parser("login", help="authenticate to the source and cache tokens (interactive)")
 
@@ -52,6 +63,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{ok}/{len(results)} day(s) synced")
     elif args.command == "activity":
         print(run_activity_sync(source, engine, args.id))
+    elif args.command == "activities":
+        results = run_activities_backfill(source, engine, args.start, args.end)
+        ok = sum(1 for r in results if r.status == "success")
+        print(f"{ok}/{len(results)} activit(y/ies) synced")
     return 0
 
 

@@ -74,6 +74,15 @@ export function runMockup(data) {
     forge: { base: 74, band: [55, 90], factors: null }
   };
 
+  // Inject real data for every mode (overrides any sample literals above — nothing
+  // displayed comes from the samples).
+  MODES.pulse = data.pulse;
+  MODES.forge = data.forge;
+  MODES.pitch = data.pitch;
+  HERO_FACTORS.pulse = data.heroFactors.pulse;
+  HERO_FACTORS.forge = data.heroFactors.forge;
+  HERO_FACTORS.pitch = data.heroFactors.pitch;
+
   /* ---------- utilities ---------- */
   function reduceMotion() { return window.matchMedia("(prefers-reduced-motion:reduce)").matches }
   function hashStr(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) } return h >>> 0 }
@@ -81,23 +90,11 @@ export function runMockup(data) {
   function fmtVal(v, fmt) { if (fmt === "time") { const h = Math.floor(v), m = Math.round((v - h) * 60); return `${h}h ${String(m).padStart(2, "0")}m` } if (fmt === "1dp") return (Math.round(v * 10) / 10).toFixed(1); if (fmt === "2dp") return (Math.round(v * 100) / 100).toFixed(2); return String(Math.round(v)) }
 
   function genSeries(meta, range) {
-    // Real history when provided (Pulse); slice day-grain by range, return all for month-grain.
-    if (meta.series && meta.series.length >= 2) {
-      const cfg = RCFG[range];
-      const all = meta.series.map(p => ({ v: p.v, date: new Date(p.date) }));
-      return cfg.unit === "day" ? all.slice(-cfg.n) : all;
-    }
-    const cfg = RCFG[range], n = cfg.n, rng = mulberry32(hashStr(meta.id + "|" + range));
-    const base = meta.base, vol = meta.vol || base * 0.08;
-    const lo = Math.min(meta.band[0] * 0.9, base * 0.8), hi = Math.max(meta.band[1] * 1.1, base * 1.2);
-    let v = base + (rng() - 0.5) * vol; const pts = [];
-    for (let i = 0; i < n; i++) {
-      v += (rng() - 0.5) * 1.5 * vol; if (v < lo) v = lo + (rng() * vol); if (v > hi) v = hi - (rng() * vol);
-      const d = new Date(TODAY); if (cfg.unit === "day") d.setDate(d.getDate() - (n - 1 - i)); else d.setMonth(d.getMonth() - (n - 1 - i));
-      pts.push({ v, date: d })
-    }
-    pts[pts.length - 1].v = base;
-    return pts;
+    // Real history only — no fabrication. Slice day-grain by range; return all otherwise.
+    const all = (meta.series || []).map(p => ({ v: p.v, date: new Date(p.date) }));
+    if (all.length < 2) return all;
+    const cfg = RCFG[range];
+    return cfg.unit === "day" ? all.slice(-cfg.n) : all;
   }
 
   /* ---------- dashboard pieces ---------- */
@@ -161,7 +158,8 @@ export function runMockup(data) {
   function heroBlock(d) { return d.hero.type === "dial" ? dialBlock(d.hero, 210) : bodyBlock(d.hero) }
   function byId(id) { return MODES[state.mode].metrics.find(m => m.id === id) }
 
-  function pitchMapPanel() {
+  function pitchMapPanel(map) {
+    if (!map || !map.path || map.path.length < 2) return ""; // no real GPS → hide
     const W = 300, H = 380, m = 13, L = m, R = W - m, T = m, B = H - m, MIDX = (L + R) / 2, MIDY = (T + B) / 2, len = B - T, wid = R - L;
     const wht = "rgba(255,255,255,0.85)";
     let mk = "";
@@ -174,36 +172,26 @@ export function runMockup(data) {
     mk += `<path d="M ${(MIDX - rD).toFixed(1)} ${B} A ${rD} ${rD} 0 0 1 ${(MIDX + +rD).toFixed(1)} ${B}" fill="none" stroke="${wht}" stroke-width="1.5"/>`;
     mk += `<rect x="${MIDX - 14}" y="${T - 3}" width="28" height="3" fill="${wht}"/><rect x="${MIDX - 14}" y="${B}" width="28" height="3" fill="${wht}"/>`;
     mk += `<circle cx="${MIDX}" cy="${(T + 0.14 * len).toFixed(1)}" r="1.6" fill="${wht}"/><circle cx="${MIDX}" cy="${(B - 0.14 * len).toFixed(1)}" r="1.6" fill="${wht}"/>`;
-    const rnd = mulberry32(20240614);
-    const anchors = [[MIDX, T + 0.18 * len, 3], [MIDX - 58, T + 0.30 * len, 2], [MIDX + 58, T + 0.30 * len, 2], [MIDX - 64, MIDY - 15, 2], [MIDX + 64, MIDY - 5, 2], [MIDX, MIDY + 15, 2], [MIDX - 42, MIDY + 75, 1], [MIDX + 48, MIDY + 65, 1], [MIDX, B - 0.26 * len, 1]];
-    const totW = anchors.reduce((s, a) => s + a[2], 0);
-    function pick() { let r = rnd() * totW, acc = 0; for (let i = 0; i < anchors.length; i++) { acc += anchors[i][2]; if (r <= acc) return i; } return anchors.length - 1; }
-    const pts = []; let x = MIDX, y = MIDY + 20, ai = 0, hold = 0;
-    for (let i = 0; i < 185; i++) {
-      if (hold <= 0) { ai = pick(); hold = 7 + Math.floor(rnd() * 7); }
-      hold--; const a = anchors[ai];
-      x += (a[0] - x) * 0.14 + (rnd() - 0.5) * 16; y += (a[1] - y) * 0.14 + (rnd() - 0.5) * 16;
-      x = Math.max(L + 6, Math.min(R - 6, x)); y = Math.max(T + 6, Math.min(B - 6, y));
-      pts.push([x, y]);
-    }
-    const poly = pts.map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
-    let heat = "";
-    [[MIDX, T + 0.22 * len, 30], [MIDX - 50, T + 0.32 * len, 22], [MIDX, MIDY + 10, 26], [MIDX + 58, MIDY, 20]].forEach(b => { heat += `<circle cx="${b[0].toFixed(1)}" cy="${b[1].toFixed(1)}" r="${b[2]}" fill="var(--accent)" opacity="0.12"/>`; });
-    const dd = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]); const WIN = 8; const cand = [];
-    for (let s = 0; s < pts.length - WIN; s++) { let tot = 0; for (let k = s; k < s + WIN - 1; k++) tot += dd(pts[k], pts[k + 1]); cand.push([tot, s]); }
-    cand.sort((a, b) => b[0] - a[0]); const chosen = [];
-    for (const c of cand) { const s = c[1]; if (chosen.some(z => Math.abs(s - z) < WIN)) continue; chosen.push(s); if (chosen.length >= 4) break; }
+    // Real GPS: normalized [x,y] in 0..1 → pitch rect, with a little inset.
+    const PX = (p) => [L + 4 + p[0] * (wid - 8), T + 4 + p[1] * (len - 8)];
+    const fmtPts = (seg) => seg.map((p) => { const q = PX(p); return `${q[0].toFixed(1)},${q[1].toFixed(1)}`; }).join(" ");
+    const poly = fmtPts(map.path);
     let spr = "";
-    chosen.forEach(s => { const seg = pts.slice(s, s + WIN).map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" "); spr += `<polyline points="${seg}" fill="none" stroke="#1A56C4" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" opacity="0.95"/>`; });
-    const svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" style="display:block"><defs><linearGradient id="turf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#DCE8FA"/><stop offset="1" stop-color="#CADCF4"/></linearGradient><filter id="hb" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="6"/></filter></defs><rect x="${L}" y="${T}" width="${wid}" height="${len}" rx="6" fill="url(#turf)"/><g filter="url(#hb)">${heat}</g>${mk}<polyline points="${poly}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>${spr}</svg>`;
-    const legend = `<div style="display:flex;gap:14px;align-items:center;margin-top:10px;font-size:11px;color:var(--ink-3,#6c7888)"><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:14px;height:3px;border-radius:2px;background:var(--accent);opacity:.5"></span>Run</span><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:14px;height:3px;border-radius:2px;background:#1A56C4"></span>Sprint</span><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:11px;height:11px;border-radius:50%;background:var(--accent);opacity:.2"></span>Dwell</span><span style="margin-left:auto;font-variant-numeric:tabular-nums;font-weight:600;color:var(--ink-2,#3a4453)">6.8 km covered</span></div>`;
-    return `<div class="panel"><div class="t-top"><span class="eyebrow">Movement · vs Wanderers</span><span class="unit">GPS map</span></div><div style="border-radius:12px;overflow:hidden;margin-top:6px;background:#CADCF4">${svg}</div>${legend}</div>`;
+    (map.sprints || []).forEach((seg) => { if (!seg || seg.length < 2) return; spr += `<polyline points="${fmtPts(seg)}" fill="none" stroke="#1A56C4" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" opacity="0.95"/>`; });
+    const svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" style="display:block"><defs><linearGradient id="turf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#DCE8FA"/><stop offset="1" stop-color="#CADCF4"/></linearGradient></defs><rect x="${L}" y="${T}" width="${wid}" height="${len}" rx="6" fill="url(#turf)"/>${mk}<polyline points="${poly}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>${spr}</svg>`;
+    const km = map.distanceKm != null ? `${map.distanceKm} km covered` : "";
+    const legend = `<div style="display:flex;gap:14px;align-items:center;margin-top:10px;font-size:11px;color:var(--ink-3,#6c7888)"><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:14px;height:3px;border-radius:2px;background:var(--accent);opacity:.5"></span>Run</span><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:14px;height:3px;border-radius:2px;background:#1A56C4"></span>Sprint</span><span style="margin-left:auto;font-variant-numeric:tabular-nums;font-weight:600;color:var(--ink-2,#3a4453)">${km}</span></div>`;
+    return `<div class="panel"><div class="t-top"><span class="eyebrow">Movement</span><span class="unit">GPS map</span></div><div style="border-radius:12px;overflow:hidden;margin-top:6px;background:#CADCF4">${svg}</div>${legend}</div>`;
   }
   function buildDashboard() {
     const d = MODES[state.mode];
-    const cards = d.metrics.slice(0, 4).map(metricTile).join("");
-    const extra = state.mode === "pitch" ? pitchMapPanel() : "";
-    return `<div class="l-stack anim">${topbar(d)}<div class="panel hero tap" data-detail="hero" tabindex="0" role="button"><span class="chev">${ICONS.chev}</span>${heroBlock(d)}</div><div class="grid2">${cards}</div>${extra}${trendPanel(d.trend, d.trendKey)}</div>`;
+    if (d.empty) {
+      return `<div class="l-stack anim">${topbar(d)}<div class="panel"><div class="empty">${d.empty}</div></div></div>`;
+    }
+    const cards = (d.metrics || []).slice(0, 4).map(metricTile).join("");
+    const extra = state.mode === "pitch" ? pitchMapPanel(data.pitchMap) : "";
+    const trend = d.trend ? trendPanel(d.trend, d.trendKey) : "";
+    return `<div class="l-stack anim">${topbar(d)}<div class="panel hero tap" data-detail="hero" tabindex="0" role="button"><span class="chev">${ICONS.chev}</span>${heroBlock(d)}</div><div class="grid2">${cards}</div>${extra}${trend}</div>`;
   }
 
   /* ---------- detail content ---------- */
@@ -211,7 +199,8 @@ export function runMockup(data) {
   function customRow() { const a = new Date(TODAY); a.setDate(a.getDate() - 13); const f = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; return `<div class="customrow"><span>From</span><input type="date" value="${f(a)}"><span>to</span><input type="date" value="${f(TODAY)}"><button onclick="window.__yebudiRenderDetail&&window.__yebudiRenderDetail()">Apply</button></div>` }
   function statGrid(pts, meta) { const vals = pts.map(p => p.v); const avg = vals.reduce((a, b) => a + b, 0) / vals.length; const mn = Math.min(...vals), mx = Math.max(...vals), lt = vals[vals.length - 1]; const u = meta.fmt === "time" ? "" : (meta.unit || ""); const cell = (lab, v) => `<div class="stat"><div class="lab">${lab}</div><div class="v">${fmtVal(v, meta.fmt)}</div>${u ? `<div class="u">${u}</div>` : ""}</div>`; return `<div class="statgrid">${cell("Avg", avg)}${cell("Min", mn)}${cell("Max", mx)}${cell("Latest", lt)}</div>` }
   function breakdownBlock(m) {
-    let bd = m.bd; if (!bd) { const r = mulberry32(hashStr(m.id + "|wd")); bd = { title: "By day of week", items: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(d => { const v = m.base * (0.8 + r() * 0.4); return { label: d, val: fmtVal(v, m.fmt), pct: 60 + r() * 40 } }) } }
+    const bd = m.bd;
+    if (!bd || !bd.items || !bd.items.length) return ""; // no real breakdown → render nothing
     const mx = Math.max(...bd.items.map(i => i.pct || 0)) || 100;
     const rows = bd.items.map(i => `<div class="bdrow"><span class="bl">${i.label}</span><span class="bdtrack"><span class="bdfill" style="width:${(i.pct / mx * 100).toFixed(0)}%;background:${i.color || "var(--accent)"}"></span></span><span class="bdval">${i.val}</span></div>`).join("");
     return `<div class="sec-lab">${bd.title}</div><div class="panel bd">${rows}</div>`;
@@ -222,18 +211,25 @@ export function runMockup(data) {
     const k = detailState.key;
     if (k === "hero") {
       const d = MODES[state.mode], hf = HERO_FACTORS[state.mode];
-      const factors = hf.factors ? hf.factors : d.hero.muscles.map(x => { const p = muscleRecovery(x.days, x.vol); return { name: x.group, val: p + "% · trained " + x.days + "d ago", pct: p, color: ragCss(p) }; });
+      const factors = (hf.factors && hf.factors.length)
+        ? hf.factors
+        : (d.hero.muscles ? d.hero.muscles.map(x => { const p = muscleRecovery(x.days, x.vol); return { name: x.group, val: p + "% · trained " + x.days + "d ago", pct: p, color: ragCss(p) }; }) : []);
       const fcol = s => s === "good" ? "var(--good)" : s === "caution" ? "var(--caution)" : "var(--bad)";
       const frows = factors.map(f => { const c = f.color || fcol(f.state); return `<div class="factor"><span class="fstate" style="background:${c}"></span><div class="fl"><div class="fname">${f.name}</div><div class="fval">${f.val}</div></div><span class="fbar"><i style="width:${f.pct}%;background:${c}"></i></span></div>`; }).join("");
-      const heroMeta = { id: state.mode + "-score", base: hf.base, vol: 5, band: hf.band, fmt: "int", unit: "", series: hf.series };
-      return { where: d.where, title: d.hero.label, html: `<div class="sec-lab">What drove it</div><div class="panel bd">${frows}</div><div class="sec-lab">History</div>${rangebar()}${detailState.range === "custom" ? customRow() : ""}${chartCard(heroMeta)}${statGrid(genSeries(heroMeta, detailState.range), heroMeta)}`, meta: heroMeta };
+      const drove = factors.length ? `<div class="sec-lab">What drove it</div><div class="panel bd">${frows}</div>` : "";
+      const heroMeta = { id: state.mode + "-score", band: hf.band, fmt: "int", unit: "", series: hf.series };
+      const history = (hf.series && hf.series.length >= 2)
+        ? `<div class="sec-lab">History</div>${rangebar()}${detailState.range === "custom" ? customRow() : ""}${chartCard(heroMeta)}${statGrid(genSeries(heroMeta, detailState.range), heroMeta)}`
+        : "";
+      return { where: d.where, title: d.hero.label, html: `${drove}${history}`, meta: heroMeta };
     }
     if (k === "zones") {
-      const d = MODES[state.mode], load = byId("load");
-      const bd = { title: "Time in HR zones · last match", items: d.trend.zones.map(z => ({ label: z.z + " " + ({ Z5: "Max", Z4: "Threshold", Z3: "Aerobic", Z2: "Easy", Z1: "Recovery" }[z.z]), val: z.pct + "%", pct: z.pct, color: z.c })) };
-      const mx = Math.max(...bd.items.map(i => i.pct));
-      const rows = bd.items.map(i => `<div class="bdrow"><span class="bl">${i.label}</span><span class="bdtrack"><span class="bdfill" style="width:${(i.pct / mx * 100).toFixed(0)}%;background:${i.color}"></span></span><span class="bdval">${i.val}</span></div>`).join("");
-      return { where: d.where, title: "Cardio load", html: `${rangebar()}${detailState.range === "custom" ? customRow() : ""}${chartCard(load)}${statGrid(genSeries(load, detailState.range), load)}<div class="sec-lab">${bd.title}</div><div class="panel bd">${rows}</div>`, meta: load };
+      const d = MODES[state.mode];
+      const zones = (d.trend && d.trend.zones) ? d.trend.zones : [];
+      const items = zones.map(z => ({ label: z.z + " " + ({ Z5: "Max", Z4: "Threshold", Z3: "Aerobic", Z2: "Easy", Z1: "Recovery", Z0: "Rest" }[z.z] || ""), val: z.pct + "%", pct: z.pct, color: z.c }));
+      const mx = Math.max(1, ...items.map(i => i.pct));
+      const rows = items.map(i => `<div class="bdrow"><span class="bl">${i.label}</span><span class="bdtrack"><span class="bdfill" style="width:${(i.pct / mx * 100).toFixed(0)}%;background:${i.color}"></span></span><span class="bdval">${i.val}</span></div>`).join("");
+      return { where: d.where, title: "Time in HR zones", html: `<div class="sec-lab">Last game</div><div class="panel bd">${rows}</div>`, meta: null };
     }
     const m = byId(k), d = MODES[state.mode];
     return { where: d.where + " · " + d.name, title: m.label, html: `${rangebar()}${detailState.range === "custom" ? customRow() : ""}${chartCard(m)}${statGrid(genSeries(m, detailState.range), m)}${breakdownBlock(m)}`, meta: m };

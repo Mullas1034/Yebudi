@@ -79,3 +79,22 @@ def run_backfill(
         results.append(run_daily_sync(source, engine, day))
         day += timedelta(days=1)
     return results
+
+
+def run_activities_backfill(
+    source: GarminSource, engine: Engine, start: date, end: date
+) -> list[SyncResult]:
+    """Fetch FULL detail (sets / zones / per-second samples) for every activity in the
+    range. The daily/backfill path only lands activity headers; this populates
+    curated.strength_set, activity_zone and activity_sample. Tolerant of per-activity
+    failures so one bad activity doesn't abort the rest.
+    """
+    results: list[SyncResult] = []
+    ids = source.list_activities(start, end)
+    print(f"found {len(ids)} activit(y/ies) in {start}..{end}")
+    for external_id in ids:
+        try:
+            results.append(run_activity_sync(source, engine, external_id))
+        except Exception as exc:  # noqa: BLE001 — keep going, the failure is in sync_log
+            print(f"  warn: activity {external_id} failed: {exc!r}")
+    return results

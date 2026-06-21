@@ -253,3 +253,8 @@ export async function getPulse(day?: string): Promise<PulseData> {
     bodyBattery: parseBodyBattery(bodyBatteryRaw),
   };
 }
+
+/** Readiness contributing factors for a day (reused by the Pitch hero). */
+export async function getReadinessFactors(day: string): Promise<Factor[]> {
+  return parseFactors(await latestRaw(day, "training_readiness"));
+}
