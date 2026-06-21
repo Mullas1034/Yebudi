@@ -1,19 +1,20 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
-import { Inter } from "next/font/google";
+import { Space_Grotesk, Hanken_Grotesk, IBM_Plex_Mono } from "next/font/google";
 
 import "./globals.css";
-import { cn } from "@/lib/utils";
 
-const inter = Inter({ subsets: ["latin"] });
+const num = Space_Grotesk({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-num" });
+const ui = Hanken_Grotesk({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-ui" });
+const mono = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-mono" });
 
 export const metadata: Metadata = {
-  title: "Morning Readiness",
-  description: "Your daily Garmin readiness, at a glance.",
+  title: "Yebudi",
+  description: "Your Garmin performance data across readiness, strength and game days.",
 };
 
 export const viewport: Viewport = {
-  themeColor: "#09090b",
+  themeColor: "#eff2f7",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -21,10 +22,8 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="en" className="dark">
-      <body className={cn(inter.className, "min-h-dvh bg-background text-foreground antialiased")}>
-        {children}
-      </body>
+    <html lang="en">
+      <body className={`${num.variable} ${ui.variable} ${mono.variable}`}>{children}</body>
     </html>
   );
 }
